@@ -50,12 +50,6 @@ QtObject {
             description: Tr.tr("System updates"),
             category: "system"
         },
-        {
-            label: Tr.tr("Plugins"),
-            icon: "extension",
-            description: Tr.tr("Manage plugins"),
-            category: "system"
-        },
 
         // Shell
         {
