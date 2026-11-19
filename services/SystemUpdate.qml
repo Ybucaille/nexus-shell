@@ -57,7 +57,7 @@ Singleton {
     }
 
     function readLog(text: string): void {
-        const lines = text.trimEnd().split("\n");
+        const lines = text.replace(/\s+$/, "").split("\n");
         const last = lines.pop() ?? "";
         const exit = last.match(/^nexus-shell: exit (\d+)$/);
         if (!exit) {
@@ -82,6 +82,23 @@ Singleton {
 
     // An upgrade started before a shell restart is picked up again.
     Component.onCompleted: runningProc.running = true
+
+    IpcHandler {
+        function check(): void {
+            root.check();
+        }
+
+        function upgrade(): void {
+            root.upgrade();
+        }
+
+        // state, then the available snapshot and the last message, tab-separated
+        function status(): string {
+            return [root.state, root.availableSnapshot, root.message].join("\t");
+        }
+
+        target: "updates"
+    }
 
     Process {
         id: runningProc
@@ -132,9 +149,7 @@ Singleton {
     FileView {
         id: upgradeLog
 
-        path: root.logPath
-        blockLoading: true
-        preload: false
+        path: root.state === "upgrading" ? root.logPath : ""
         printErrors: false
         onLoaded: {
             if (root.state === "upgrading")
