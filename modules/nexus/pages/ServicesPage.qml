@@ -11,7 +11,7 @@ import qs.modules.nexus.common
 PageBase {
     id: root
 
-    // Lyrics backends, ordered to match config::LyricsBackend (Auto, Local, LRCLIB, NetEase)
+    // Lyrics backends, ordered to match config::LyricsBackend (Auto, Local, LRCLIB)
     readonly property list<MenuItem> lyricsItems: [
         MenuItem {
             text: Tr.trCtx("Auto", "lyrics backend")
@@ -21,9 +21,6 @@ PageBase {
         },
         MenuItem {
             text: "LRCLIB"
-        },
-        MenuItem {
-            text: "NetEase"
         }
     ]
 
@@ -128,7 +125,7 @@ PageBase {
         SelectRow {
             first: true
             label: Tr.tr("Lyrics backend")
-            subtext: Tr.tr("Source used to fetch synced lyrics")
+            subtext: Tr.tr("Local files only, or also LRCLIB online (sends the title and artist)")
             menuItems: root.lyricsItems
             active: root.lyricsItems[Lyrics.preferredBackend] ?? root.lyricsItems[0]
             onSelected: item => Lyrics.preferredBackend = root.lyricsItems.indexOf(item)

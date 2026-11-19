@@ -3,7 +3,6 @@
 #include <qdiriterator.h>
 #include <qfileinfo.h>
 #include <qjsonarray.h>
-#include <qnetworkcookiejar.h>
 #include <qsavefile.h>
 #include <qurlquery.h>
 
@@ -28,18 +27,13 @@ namespace {
 
 constexpr int k_loadDebounceMs = 50;
 constexpr qreal k_indexFudge = 0.1;
-
-[[nodiscard]] const QHash<QByteArray, QByteArray>& netEaseHeaders() {
-    static const QHash<QByteArray, QByteArray> k_h = {
-        { "User-Agent"_ba, "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0"_ba },
-        { "Referer"_ba, "https://music.163.com/"_ba },
-    };
-    return k_h;
-}
+// Online lookups give up rather than hang or fill memory.
+constexpr int k_transferTimeoutMs = 10000;
+constexpr qint64 k_maxReplyBytes = 1024 * 1024;
 
 [[nodiscard]] const QHash<QByteArray, QByteArray>& lrclibHeaders() {
     static const QHash<QByteArray, QByteArray> k_h = {
-        { "User-Agent"_ba, "caelestia-shell (https://github.com/caelestia-dots/shell)"_ba },
+        { "User-Agent"_ba, "nexus-shell (https://github.com/Ybucaille/nexus-shell)"_ba },
     };
     return k_h;
 }
@@ -59,6 +53,13 @@ constexpr qreal k_indexFudge = 0.1;
         }
     }
     return out;
+}
+
+// LRCLIB ids are numbers; anything else never reaches a URL or a cache path.
+[[nodiscard]] bool isLrclibId(const QString& id) {
+    return !id.isEmpty() && std::all_of(id.cbegin(), id.cend(), [](QChar c) {
+        return c.isDigit();
+    });
 }
 
 [[nodiscard]] bool containsCi(const QString& haystack, const QString& needle) {
@@ -138,7 +139,7 @@ void Lyrics::setSelectedCandidate(const LyricCandidate& value) {
     cancelInFlight();
     const int reqId = newRequestId();
 
-    if (b == LyricsBackend::LRCLIB || b == LyricsBackend::NetEase) {
+    if (b == LyricsBackend::LRCLIB) {
         const QString cached = readCachedLrc(b, value.id());
         if (!cached.isEmpty()) {
             const auto lines = parseLrc(cached);
@@ -154,9 +155,11 @@ void Lyrics::setSelectedCandidate(const LyricCandidate& value) {
     }
 
     if (b == LyricsBackend::LRCLIB) {
-        fetchLrclibById(value.id(), reqId);
-    } else if (b == LyricsBackend::NetEase) {
-        fetchNetEaseLyricsById(value.id(), reqId);
+        if (onlineAllowed() && isLrclibId(value.id())) {
+            fetchLrclibById(value.id(), reqId);
+        } else {
+            setLoading(false);
+        }
     } else if (b == LyricsBackend::Local) {
         // For local, the id is the file path. Read directly.
         QFile f(value.id());
@@ -384,14 +387,17 @@ void Lyrics::doLoad() {
     LyricCandidate restored;
     const QString savedBackendKey = saved.value(u"backend"_s).toString();
     const QString savedId = saved.value(u"id"_s).toString();
-    if (!savedBackendKey.isEmpty() && !savedId.isEmpty()) {
-        restored = LyricCandidate(backendFromKey(savedBackendKey), savedId, m_title, m_artist, m_album, m_duration);
+    const LyricsBackend savedBackend = backendFromKey(savedBackendKey);
+    // A selection from a removed backend reads as Auto and is dropped.
+    if (savedBackend != LyricsBackend::Auto && !savedId.isEmpty()) {
+        restored = LyricCandidate(savedBackend, savedId, m_title, m_artist, m_album, m_duration);
     }
     m_settingFromPrefs = false;
 
-    // Always populate online candidates for the picker, regardless of preferred backend
-    searchLrclibCandidates(reqId);
-    searchNetEaseCandidates(reqId);
+    // Online candidates for the picker, only when online lookups are allowed
+    if (onlineAllowed()) {
+        searchLrclibCandidates(reqId);
+    }
 
     if (restored.isValid()) {
         // Honor saved selection for this track
@@ -408,9 +414,6 @@ void Lyrics::doLoad() {
         break;
     case LyricsBackend::LRCLIB:
         tryLrclib(reqId);
-        break;
-    case LyricsBackend::NetEase:
-        tryNetEase(reqId);
         break;
     case LyricsBackend::Auto:
     default:
@@ -430,9 +433,6 @@ void Lyrics::chainNext(LyricsBackend justFailed, int reqId) {
         tryLrclib(reqId);
         return;
     case LyricsBackend::LRCLIB:
-        tryNetEase(reqId);
-        return;
-    case LyricsBackend::NetEase:
     default:
         setLoading(false);
         return;
@@ -536,6 +536,10 @@ void Lyrics::tryLrclib(int reqId) {
         const QJsonObject obj = doc.object();
         const QString synced = obj.value(u"syncedLyrics"_s).toString();
         const qint64 id = static_cast<qint64>(obj.value(u"id"_s).toDouble());
+        if (id <= 0) {
+            chainNext(LyricsBackend::LRCLIB, reqId);
+            return;
+        }
 
         if (synced.isEmpty()) {
             qCDebug(lcLyrics) << "lrclib: no syncedLyrics for" << m_artist << "-" << m_title;
@@ -561,65 +565,6 @@ void Lyrics::tryLrclib(int reqId) {
             persistTrackPrefs();
         }
         setLoading(false);
-    });
-}
-
-void Lyrics::tryNetEase(int reqId) {
-    if (reqId != m_currentRequestId) {
-        return;
-    }
-
-    setBackend(LyricsBackend::NetEase);
-
-    // Reset cookies (LyricsBackend::NetEase rejects requests with stale cookies sometimes)
-    m_nam->setCookieJar(new QNetworkCookieJar(m_nam));
-
-    QUrl url(u"https://music.163.com/api/search/get"_s);
-    QUrlQuery q;
-    q.addQueryItem(u"s"_s, u"%1 %2"_s.arg(m_title, m_artist));
-    q.addQueryItem(u"type"_s, u"1"_s);
-    q.addQueryItem(u"limit"_s, u"5"_s);
-    url.setQuery(q);
-
-    auto* reply = getJson(url, netEaseHeaders());
-    trackReply(reqId, reply);
-
-    QObject::connect(reply, &QNetworkReply::finished, this, [this, reply, reqId] {
-        reply->deleteLater();
-        if (reqId != m_currentRequestId) {
-            return;
-        }
-        if (reply->error() != QNetworkReply::NoError) {
-            qCDebug(lcLyrics) << "netease /search error:" << reply->errorString();
-            chainNext(LyricsBackend::NetEase, reqId);
-            return;
-        }
-
-        const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
-        const QJsonArray songs = doc.object().value(u"result"_s).toObject().value(u"songs"_s).toArray();
-
-        // Find best match by artist substring
-        qint64 bestId = -1;
-        for (const auto& v : songs) {
-            const QJsonObject s = v.toObject();
-            const QJsonArray artists = s.value(u"artists"_s).toArray();
-            if (artists.isEmpty()) {
-                continue;
-            }
-            const QString sArtist = artists.first().toObject().value(u"name"_s).toString();
-            if (containsCi(m_artist, sArtist) || containsCi(sArtist, m_artist)) {
-                bestId = static_cast<qint64>(s.value(u"id"_s).toDouble());
-                break;
-            }
-        }
-
-        if (bestId < 0) {
-            qCDebug(lcLyrics) << "netease: no artist match for" << m_artist << "-" << m_title;
-            chainNext(LyricsBackend::NetEase, reqId);
-            return;
-        }
-
-        fetchNetEaseLyricsById(QString::number(bestId), reqId);
     });
 }
 
@@ -661,49 +606,6 @@ void Lyrics::searchLrclibCandidates(int reqId) {
     });
 }
 
-void Lyrics::searchNetEaseCandidates(int reqId) {
-    m_nam->setCookieJar(new QNetworkCookieJar(m_nam));
-
-    QUrl url(u"https://music.163.com/api/search/get"_s);
-    QUrlQuery q;
-    q.addQueryItem(u"s"_s, u"%1 %2"_s.arg(m_title, m_artist));
-    q.addQueryItem(u"type"_s, u"1"_s);
-    q.addQueryItem(u"limit"_s, u"5"_s);
-    url.setQuery(q);
-
-    auto* reply = getJson(url, netEaseHeaders());
-    trackReply(reqId, reply);
-
-    QObject::connect(reply, &QNetworkReply::finished, this, [this, reply, reqId] {
-        reply->deleteLater();
-        if (reqId != m_currentRequestId) {
-            return;
-        }
-        if (reply->error() != QNetworkReply::NoError) {
-            qCDebug(lcLyrics) << "netease candidates error:" << reply->errorString();
-            return;
-        }
-        const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
-        const QJsonArray songs = doc.object().value(u"result"_s).toObject().value(u"songs"_s).toArray();
-
-        QList<LyricCandidate> add;
-        add.reserve(songs.size());
-        for (const auto& v : songs) {
-            const QJsonObject s = v.toObject();
-            QStringList artistNames;
-            const QJsonArray artists = s.value(u"artists"_s).toArray();
-            artistNames.reserve(artists.size());
-            for (const auto& a : artists) {
-                artistNames.append(a.toObject().value(u"name"_s).toString());
-            }
-            add.append(LyricCandidate(LyricsBackend::NetEase,
-                QString::number(static_cast<qint64>(s.value(u"id"_s).toDouble())), s.value(u"name"_s).toString(),
-                artistNames.join(u", "_s)));
-        }
-        appendCandidates(add);
-    });
-}
-
 void Lyrics::fetchLrclibById(const QString& id, int reqId) {
     const QUrl url(u"https://lrclib.net/api/get/"_s + id);
     auto* reply = getJson(url, lrclibHeaders());
@@ -732,43 +634,9 @@ void Lyrics::fetchLrclibById(const QString& id, int reqId) {
     });
 }
 
-void Lyrics::fetchNetEaseLyricsById(const QString& id, int reqId) {
-    QUrl url(u"https://music.163.com/api/song/lyric"_s);
-    QUrlQuery q;
-    q.addQueryItem(u"id"_s, id);
-    q.addQueryItem(u"lv"_s, u"1"_s);
-    q.addQueryItem(u"kv"_s, u"1"_s);
-    q.addQueryItem(u"tv"_s, u"-1"_s);
-    url.setQuery(q);
-
-    auto* reply = getJson(url, netEaseHeaders());
-    trackReply(reqId, reply);
-
-    QObject::connect(reply, &QNetworkReply::finished, this, [this, reply, reqId, id] {
-        reply->deleteLater();
-        if (reqId != m_currentRequestId) {
-            return;
-        }
-        if (reply->error() != QNetworkReply::NoError) {
-            qCWarning(lcLyrics) << "netease /lyric error:" << reply->errorString();
-            setLoading(false);
-            return;
-        }
-        const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
-        const QString lrc = doc.object().value(u"lrc"_s).toObject().value(u"lyric"_s).toString();
-        if (lrc.isEmpty()) {
-            qCDebug(lcLyrics) << "netease /lyric: empty for id" << id;
-            setLoading(false);
-            return;
-        }
-        writeCachedLrc(LyricsBackend::NetEase, id, lrc);
-        setLines(parseLrc(lrc), LyricsBackend::NetEase);
-        setLoading(false);
-    });
-}
-
 QNetworkReply* Lyrics::getJson(const QUrl& url, const QHash<QByteArray, QByteArray>& headers) {
     QNetworkRequest req(url);
+    req.setTransferTimeout(k_transferTimeoutMs);
     req.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::AlwaysNetwork);
     req.setRawHeader("Cache-Control"_ba, "no-cache, no-store"_ba);
     req.setRawHeader("Pragma"_ba, "no-cache"_ba);
@@ -777,7 +645,18 @@ QNetworkReply* Lyrics::getJson(const QUrl& url, const QHash<QByteArray, QByteArr
     for (auto it = headers.constBegin(); it != headers.constEnd(); ++it) {
         req.setRawHeader(it.key(), it.value());
     }
-    return m_nam->get(req);
+    auto* reply = m_nam->get(req);
+    QObject::connect(reply, &QNetworkReply::downloadProgress, reply, [reply](qint64 received, qint64) {
+        if (received > k_maxReplyBytes) {
+            qCWarning(lcLyrics) << "reply too large, aborting:" << reply->url().host();
+            reply->abort();
+        }
+    });
+    return reply;
+}
+
+bool Lyrics::onlineAllowed() const {
+    return m_preferredBackend == LyricsBackend::Auto || m_preferredBackend == LyricsBackend::LRCLIB;
 }
 
 void Lyrics::onPreferredBackendConfigChanged() {
@@ -881,8 +760,6 @@ QString Lyrics::backendKey(LyricsBackend value) {
         return u"Local"_s;
     case LyricsBackend::LRCLIB:
         return u"LRCLIB"_s;
-    case LyricsBackend::NetEase:
-        return u"NetEase"_s;
     case LyricsBackend::Auto:
     default:
         return u"Auto"_s;
@@ -895,9 +772,6 @@ LyricsBackend Lyrics::backendFromKey(const QString& key) {
     }
     if (key.compare(u"LRCLIB"_s, Qt::CaseInsensitive) == 0) {
         return LyricsBackend::LRCLIB;
-    }
-    if (key.compare(u"NetEase"_s, Qt::CaseInsensitive) == 0) {
-        return LyricsBackend::NetEase;
     }
     return LyricsBackend::Auto;
 }

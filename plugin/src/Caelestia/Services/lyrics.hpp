@@ -84,15 +84,13 @@ private:
 
     void tryLocal(int reqId);
     void tryLrclib(int reqId);
-    void tryNetEase(int reqId);
     void chainNext(LyricsBackend justFailed, int reqId);
 
     void searchLrclibCandidates(int reqId);
-    void searchNetEaseCandidates(int reqId);
 
     void fetchLrclibById(const QString& id, int reqId);
-    void fetchNetEaseLyricsById(const QString& id, int reqId);
 
+    [[nodiscard]] bool onlineAllowed() const;
     QNetworkReply* getJson(const QUrl& url, const QHash<QByteArray, QByteArray>& headers = {});
     void trackReply(int reqId, QNetworkReply* reply);
 
