@@ -226,14 +226,15 @@ Item {
 
                     required property var modelData
                     required property int index // Needed, LazyListView will fail to set it if it doesn't exist
+                    readonly property string appIconName: DesktopEntries.heuristicLookup(modelData.lastIpcObject.class)?.icon ?? ""
 
                     grade: 0
                     horizontalAlignment: Text.AlignHCenter
                     text: Icons.getAppCategoryIcon(modelData.lastIpcObject.class, "terminal")
-                    readonly property string appIconName: DesktopEntries.heuristicLookup(modelData.lastIpcObject.class)?.icon ?? ""
 
                     // Keep the category glyph as a fallback and preserve its layout metrics.
                     color: appIcon.status === Image.Ready ? "transparent" : root.onOtherMonitor ? root.offMonitorColour : Colours.palette.m3onSurfaceVariant
+                    opacity: LazyListView.adding || LazyListView.removing ? 0 : 1
 
                     IconImage {
                         id: appIcon
@@ -245,8 +246,6 @@ Item {
                         visible: status === Image.Ready
                         opacity: root.onOtherMonitor ? 0.5 : 1
                     }
-
-                    opacity: LazyListView.adding || LazyListView.removing ? 0 : 1
 
                     Behavior on opacity {
                         Anim {
