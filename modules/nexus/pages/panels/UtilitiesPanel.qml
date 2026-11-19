@@ -127,20 +127,12 @@ PageBase {
         }
 
         ToggleRow {
+            last: true
             text: Tr.tr("Do not disturb")
             subtext: Tr.tr("Silence notifications")
             disabled: !Config.utilities.cards.quickToggles
             checked: root.isToggleOn("dnd")
             onToggled: root.setToggleOn("dnd", checked)
-        }
-
-        ToggleRow {
-            last: true
-            text: Tr.tr("VPN")
-            subtext: Tr.tr("Connect or disconnect the VPN")
-            disabled: !Config.utilities.cards.quickToggles
-            checked: root.isToggleOn("vpn")
-            onToggled: root.setToggleOn("vpn", checked)
         }
     }
 }

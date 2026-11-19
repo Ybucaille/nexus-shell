@@ -177,12 +177,6 @@ PageBase {
         }
 
         ToggleRow {
-            text: Tr.tr("VPN changes")
-            checked: GlobalConfig.utilities.toasts.vpnChanged
-            onToggled: GlobalConfig.utilities.toasts.vpnChanged = checked
-        }
-
-        ToggleRow {
             last: true
             text: Tr.tr("Now playing")
             checked: GlobalConfig.utilities.toasts.nowPlaying

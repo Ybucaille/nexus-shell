@@ -29,10 +29,6 @@ StyledRect {
                 return false;
             }
 
-            if (item.id === "vpn") {
-                return GlobalConfig.utilities.vpn.selectedProvider.length > 0;
-            }
-
             seenIds.add(item.id);
             return true;
         });
@@ -137,17 +133,6 @@ StyledRect {
                         icon: "notifications_off"
                         checked: Notifs.dnd
                         onClicked: Notifs.dnd = !Notifs.dnd
-                    }
-                }
-                DelegateChoice {
-                    roleValue: "vpn"
-                    delegate: Toggle {
-                        icon: "vpn_key"
-                        checked: VPN.connected && VPN.status.state !== "needs-auth" && VPN.status.state !== "error"
-                        enabled: !VPN.connecting && !VPN.disconnecting
-                        isToggle: VPN.status.state !== "needs-auth" && VPN.status.state !== "error"
-                        inactiveOnColour: Colours.palette.m3onSurfaceVariant
-                        onClicked: VPN.toggle()
                     }
                 }
             }
