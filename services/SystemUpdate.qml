@@ -7,8 +7,8 @@ import Caelestia.I18n
 
 // System updates through nexusos-update, the NexusOS updater (nexusos-base).
 // A release is a dated Arch Linux Archive snapshot plus the nexusos
-// repository built on it. Nothing here polls in the background: a check runs
-// when asked, and the log is only read while an upgrade runs.
+// repository built on it. A check runs when asked (UpdateMonitor asks a few
+// times a day), and the log is only read while an upgrade runs.
 Singleton {
     id: root
 
@@ -31,11 +31,29 @@ Singleton {
     property string message
     property string progress
     property date lastCheck
+    // The running check was started by UpdateMonitor: a failure leaves the
+    // state as it was instead of reporting an error nobody asked for.
+    property bool background
+    property string stateBeforeCheck
     readonly property bool busy: state === "checking" || state === "upgrading"
 
     function check(): void {
         if (busy)
             return;
+        background = false;
+        startCheck();
+    }
+
+    // Not after an upgrade, whose "restart" state a check would hide.
+    function checkInBackground(): void {
+        if (busy || state === "done")
+            return;
+        background = true;
+        startCheck();
+    }
+
+    function startCheck(): void {
+        stateBeforeCheck = state;
         state = "checking";
         message = "";
         checkProc.running = true;
@@ -122,6 +140,11 @@ Singleton {
             id: checkErr
         }
         onExited: code => {
+            if (code !== 0 && code !== 2 && root.background) {
+                root.state = root.stateBeforeCheck;
+                return;
+            }
+
             root.lastCheck = new Date();
             if (code === 0) {
                 root.availableSnapshot = root.match(checkOut.text, /snapshot \S+ -> (\S+)/);
