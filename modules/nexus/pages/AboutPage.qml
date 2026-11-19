@@ -70,7 +70,9 @@ PageBase {
                 StyledText {
                     Layout.alignment: Qt.AlignHCenter
                     Layout.topMargin: Tokens.spacing.small
+                    Layout.maximumWidth: hero.width
                     text: SysInfo.osPrettyName || SysInfo.osName
+                    elide: Text.ElideRight
                     font: Tokens.font.headline.builders.large.width(110).build()
                 }
 
