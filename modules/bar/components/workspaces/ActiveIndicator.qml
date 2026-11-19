@@ -4,15 +4,14 @@ import QtQuick
 import Caelestia.Components
 import Caelestia.Config
 import qs.components
-import qs.components.effects
 import qs.services
 
-StyledRect {
+Item {
     id: root
 
     required property Workspace activeWs
     required property Item mask
-    property alias contentColour: colouriser.colorizationColor
+    property color color: Colours.palette.m3primary
 
     property real start
     property real end
@@ -42,8 +41,14 @@ StyledRect {
     clip: true
     y: start + mask.y
     implicitHeight: end - start
-    radius: Tokens.rounding.full
-    color: Colours.palette.m3primary
+
+    StyledRect {
+        anchors.fill: parent
+        radius: Tokens.rounding.full
+        color: Qt.alpha(root.color, 0.18)
+        border.width: 1
+        border.color: Qt.alpha(root.color, 0.6)
+    }
 
     Anim on start {
         id: startAnim
@@ -63,20 +68,5 @@ StyledRect {
         }
 
         target: root.activeWs?.LazyListView ?? null
-    }
-
-    Colouriser {
-        id: colouriser
-
-        source: root.mask
-        sourceColor: Colours.palette.m3onSurface
-        colorizationColor: Colours.palette.m3onPrimary
-
-        x: 0
-        y: -parent.start
-        implicitWidth: root.mask.width
-        implicitHeight: root.mask.height
-
-        anchors.horizontalCenter: parent.horizontalCenter
     }
 }

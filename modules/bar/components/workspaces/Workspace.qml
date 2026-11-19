@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Widgets
 import M3Shapes
 import Caelestia.Components
 import Caelestia.Config
@@ -229,7 +230,21 @@ Item {
                     grade: 0
                     horizontalAlignment: Text.AlignHCenter
                     text: Icons.getAppCategoryIcon(modelData.lastIpcObject.class, "terminal")
-                    color: root.onOtherMonitor ? root.offMonitorColour : Colours.palette.m3onSurfaceVariant
+                    readonly property string appIconName: DesktopEntries.heuristicLookup(modelData.lastIpcObject.class)?.icon ?? ""
+
+                    // Keep the category glyph as a fallback and preserve its layout metrics.
+                    color: appIcon.status === Image.Ready ? "transparent" : root.onOtherMonitor ? root.offMonitorColour : Colours.palette.m3onSurfaceVariant
+
+                    IconImage {
+                        id: appIcon
+
+                        anchors.centerIn: parent
+                        implicitSize: Math.min(win.width, win.height)
+                        source: win.appIconName ? Quickshell.iconPath(win.appIconName, true) : ""
+                        asynchronous: true
+                        visible: status === Image.Ready
+                        opacity: root.onOtherMonitor ? 0.5 : 1
+                    }
 
                     opacity: LazyListView.adding || LazyListView.removing ? 0 : 1
 

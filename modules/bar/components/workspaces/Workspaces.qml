@@ -106,6 +106,8 @@ StyledClippingRect {
 
         LazyListView {
             id: workspaces
+            // Draw original content above the selection background, without tinting.
+            z: 1
 
             anchors.left: parent.left
             anchors.right: parent.right

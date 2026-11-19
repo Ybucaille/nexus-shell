@@ -146,6 +146,8 @@ Item {
 
     LazyListView {
         id: view
+        // Match normal workspaces: preserve the colours of application icons.
+        z: 1
 
         anchors.left: parent.left
         anchors.right: parent.right
@@ -192,7 +194,6 @@ Item {
             activeWs: root.activeWs
             mask: view
             color: Colours.palette.m3tertiary
-            contentColour: Colours.palette.m3onTertiary
         }
     }
 
