@@ -17,8 +17,6 @@ Singleton {
     property list<var> forecast
     property list<var> hourlyForecast
 
-    property bool ipApiRequestPending: false
-    property double ipApiBlockedUntil: 0
     property bool citiesLoaded: false
     property string pendingCoords
 
@@ -39,74 +37,23 @@ Singleton {
         return Units.formatTemp(value, unit, compact);
     }
 
+    // Weather needs a location set by the user: the shell never looks the
+    // machine up by its IP address.
     function reload(): void {
         const configLocation = GlobalConfig.services.weatherLocation;
 
-        if (configLocation) {
-            if (configLocation.indexOf(",") !== -1 && !isNaN(parseFloat(configLocation.split(",")[0]))) {
-                loc = configLocation;
-                fetchCityFromCoords(configLocation);
-            } else {
-                fetchCoordsFromCity(configLocation);
-            }
-        } else if ((!loc || timer.elapsed() > 900) && !ipApiRequestPending && Date.now() >= ipApiBlockedUntil) {
-            ipApiRequestPending = true;
-
-            Requests.get("http://ip-api.com/json?fields=status,message,city,lat,lon", (text, metadata) => {
-                ipApiRequestPending = false;
-                recordIpApiRateLimit(metadata);
-
-                // Protect against stale responses overwriting the manually-set location,
-                // in case the config was updated while this request was in-flight.
-                if (GlobalConfig.services.weatherLocation)
-                    return;
-
-                let response;
-                try {
-                    response = JSON.parse(text);
-                } catch (error) {
-                    console.warn(lc, `Unable to parse response from ip-api: ${error}`);
-                    return;
-                }
-
-                const lat = Number(response.lat);
-                const lon = Number(response.lon);
-
-                if (response.status !== "success" || !Number.isFinite(lat) || !Number.isFinite(lon)) {
-                    console.warn(lc, `ip-api lookup failed: ${response.message ?? "invalid response"}`);
-                    return;
-                }
-
-                city = fixCityName(response.city ?? "");
-                timer.restart();
-                loc = `${lat},${lon}`;
-            }, (error, metadata) => {
-                ipApiRequestPending = false;
-
-                if (!recordIpApiRateLimit(metadata))
-                    console.warn(lc, `ip-api request failed: ${error}`);
-            });
+        if (!configLocation) {
+            loc = "";
+            city = "";
+            cc = null;
+            forecast = [];
+            hourlyForecast = [];
+        } else if (configLocation.indexOf(",") !== -1 && !isNaN(parseFloat(configLocation.split(",")[0]))) {
+            loc = configLocation;
+            fetchCityFromCoords(configLocation);
+        } else {
+            fetchCoordsFromCity(configLocation);
         }
-    }
-
-    function recordIpApiRateLimit(metadata: var): bool {
-        const remainingHeader = metadata?.headers?.["x-rl"];
-        const exhausted = remainingHeader !== undefined && Number(remainingHeader) === 0;
-
-        if (metadata?.statusCode !== 429 && !exhausted)
-            return false;
-
-        const ttlHeader = metadata?.headers?.["x-ttl"];
-        const ttl = Number(ttlHeader);
-
-        const delaySeconds = Number.isFinite(ttl) ? Math.max(1, Math.ceil(ttl) + 1) : 61;
-
-        const delayMs = delaySeconds * 1000;
-        ipApiBlockedUntil = Date.now() + delayMs;
-        ipApiRetryTimer.interval = delayMs;
-        ipApiRetryTimer.restart();
-
-        return true;
     }
 
     function fixCityName(cityName: string): string {
@@ -222,7 +169,7 @@ Singleton {
                 city = fixCityName(result.name);
             } else {
                 loc = "";
-                reload();
+                city = Tr.trCtx("Unknown city", "weather location unavailable");
             }
         });
     }
@@ -351,23 +298,6 @@ Singleton {
     }
 
     Timer {
-        id: ipApiRetryTimer
-
-        repeat: false
-
-        onTriggered: {
-            const remaining = root.ipApiBlockedUntil - Date.now();
-
-            if (remaining > 0) {
-                interval = Math.ceil(remaining);
-                restart();
-            } else {
-                root.reload();
-            }
-        }
-    }
-
-    Timer {
         id: citiesSaveTimer
 
         interval: 1000
@@ -379,10 +309,6 @@ Singleton {
             root.cachedCities.forEach((cityName, coords) => data[coords] = cityName);
             citiesStorage.setText(JSON.stringify(data));
         }
-    }
-
-    ElapsedTimer {
-        id: timer
     }
 
     FileView {
