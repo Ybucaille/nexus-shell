@@ -113,7 +113,8 @@ Singleton {
     Process {
         id: checkProc
 
-        command: ["pkexec", root.updater, "--check"]
+        // The check runs as the user (nexusos-base 0.5.0); only the upgrade needs pkexec.
+        command: [root.updater, "--check"]
         stdout: StdioCollector {
             id: checkOut
         }
@@ -128,10 +129,6 @@ Singleton {
             } else if (code === 2) {
                 root.availableSnapshot = "";
                 root.state = "upToDate";
-            } else if (code === 126 || code === 127) {
-                // pkexec: authentication dismissed or refused
-                root.state = "idle";
-                root.message = Tr.tr("Authentication was cancelled.");
             } else {
                 root.state = "failed";
                 root.message = checkErr.text.trim().split("\n").pop() || Tr.tr("The check failed (exit %1).").arg(code);
