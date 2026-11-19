@@ -112,7 +112,5 @@ PageBase {
             disabled: !Nmcli.wifiEnabled
             onClicked: root.nState.openSubPage(2) // Add network sub-page
         }
-
-        }
     }
 }
