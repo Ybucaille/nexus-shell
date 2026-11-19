@@ -25,6 +25,8 @@ Singleton {
         FloatingWindow {
             id: win
 
+            property int page
+
             color: Colours.tPalette.m3surface
             surfaceFormat.opaque: false
 
@@ -50,6 +52,7 @@ Singleton {
                 anchors.fill: parent
                 nState.screen: win.screen
                 nState.isWindow: true
+                nState.currentPageIdx: win.page
                 onClose: win.destroy()
             }
 

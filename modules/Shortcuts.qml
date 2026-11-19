@@ -140,6 +140,16 @@ Scope {
             WindowFactory.create();
         }
 
+        // Opens the settings on one page, by its PageRegistry id ("updates").
+        function openPage(id: string): void {
+            const page = PageRegistry.indexOf(id);
+            if (page < 0)
+                console.warn(lc, `Settings page "${id}" does not exist`);
+            WindowFactory.create(null, {
+                page: Math.max(0, page)
+            });
+        }
+
         target: "nexus"
     }
 
