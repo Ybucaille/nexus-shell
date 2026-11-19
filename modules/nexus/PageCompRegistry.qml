@@ -92,7 +92,11 @@ QtObject {
 
         // System
         Component {
-            PlaceholderComp {}
+            StackPage {
+                Component {
+                    UpdatesPage {}
+                }
+            }
         },
 
         // Shell
