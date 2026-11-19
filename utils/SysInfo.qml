@@ -14,8 +14,7 @@ Singleton {
     property string osPrettyName
     property string osId
     property list<string> osIdLike
-    property string osLogo: Qt.resolvedUrl(`${Quickshell.shellDir}/assets/logo.svg`)
-    property bool isDefaultLogo: true
+    property string osLogo
 
     property string uptime
     // Uptime trimmed to its two largest components
@@ -60,17 +59,11 @@ Singleton {
             root.osId = fd("ID");
             root.osIdLike = fd("ID_LIKE").split(" ");
 
-            const logo = Quickshell.iconPath(fd("LOGO"), true);
-            if (GlobalConfig.general.logo === "caelestia") {
-                root.osLogo = Qt.resolvedUrl(`${Quickshell.shellDir}/assets/logo.svg`);
-                root.isDefaultLogo = true;
-            } else if (GlobalConfig.general.logo) {
+            // The logo comes from os-release (nexusos-base) unless the user picks one.
+            if (GlobalConfig.general.logo)
                 root.osLogo = Quickshell.iconPath(GlobalConfig.general.logo, true) || "file://" + Paths.absolutePath(GlobalConfig.general.logo);
-                root.isDefaultLogo = false;
-            } else if (logo) {
-                root.osLogo = logo;
-                root.isDefaultLogo = false;
-            }
+            else
+                root.osLogo = Quickshell.iconPath(fd("LOGO"), true);
         }
     }
 

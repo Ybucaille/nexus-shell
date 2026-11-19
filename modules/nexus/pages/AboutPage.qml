@@ -5,15 +5,13 @@ import Caelestia
 import Caelestia.Config
 import Caelestia.I18n
 import qs.components
+import qs.components.effects
 import qs.services
 import qs.utils
 import qs.modules.nexus.common
 
 PageBase {
     id: root
-
-    // Plugin support is not wired up yet; always 0 for now
-    readonly property int pluginCount: 0
 
     property string quickshellVersion
     property string cliVersion
@@ -62,22 +60,23 @@ PageBase {
                 width: parent.width - Tokens.padding.largeIncreased * 2
                 spacing: Tokens.spacing.small
 
-                AnimatedLogo {
+                ColouredIcon {
                     Layout.alignment: Qt.AlignHCenter
-                    Layout.preferredWidth: implicitWidth
-                    Layout.preferredHeight: implicitHeight
+                    source: SysInfo.osLogo
+                    implicitSize: Tokens.sizes.dashboard.logoSize * 2
+                    colour: Colours.palette.m3primary
                 }
 
                 StyledText {
                     Layout.alignment: Qt.AlignHCenter
                     Layout.topMargin: Tokens.spacing.small
-                    text: "Caelestia"
+                    text: SysInfo.osPrettyName || SysInfo.osName
                     font: Tokens.font.headline.builders.large.width(110).build()
                 }
 
                 StyledText {
                     Layout.alignment: Qt.AlignHCenter
-                    text: CUtils.version ? `v${CUtils.version}` : "…"
+                    text: CUtils.version ? `nexus-shell ${CUtils.version}` : "…"
                     color: Colours.palette.m3onSurfaceVariant
                     font: Tokens.font.body.medium
                 }
@@ -124,7 +123,7 @@ PageBase {
 
         InfoRow {
             first: true
-            label: Tr.trCtx("Shell", "the caelestia shell itself, not a unix shell")
+            label: Tr.trCtx("Shell", "the desktop shell itself, not a unix shell")
             value: CUtils.version || "…"
         }
 
@@ -142,18 +141,6 @@ PageBase {
             last: true
             label: "Qt"
             value: CUtils.qtVersion || "…"
-        }
-
-        // Plugins
-        SectionHeader {
-            text: Tr.tr("Plugins")
-        }
-
-        InfoRow {
-            first: true
-            last: true
-            label: Tr.tr("Loaded plugins")
-            value: root.pluginCount.toString()
         }
     }
 }
