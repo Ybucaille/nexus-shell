@@ -218,12 +218,7 @@ QtObject {
     }
 
     function close(): void {
-        closed = true;
-        if (locks.size === 0 && Notifs.list.includes(this)) {
-            Notifs.list = Notifs.list.filter(n => n !== this);
-            notification?.dismiss();
-            destroy();
-        }
+        Notifs.closeAll([this]);
     }
 
     Component.onCompleted: {

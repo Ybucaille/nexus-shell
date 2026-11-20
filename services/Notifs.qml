@@ -30,6 +30,30 @@ Singleton {
         return false;
     }
 
+    // Every change to `list` re-runs the bindings that filter it, so drop
+    // several notifications with one update instead of one each.
+    function closeAll(notifs: list<var>): void {
+        // `closed` is only set once a notification has left the list,
+        // otherwise each change would re-run `notClosed` as well.
+        const tracked = new Set(root.list);
+        const removed = new Set();
+        for (const notif of notifs) {
+            if (notif.locks.size === 0 && tracked.has(notif))
+                removed.add(notif);
+            else
+                notif.closed = true;
+        }
+        if (removed.size === 0)
+            return;
+
+        root.list = root.list.filter(n => !removed.has(n));
+        for (const notif of removed) {
+            notif.closed = true;
+            notif.notification?.dismiss();
+            notif.destroy();
+        }
+    }
+
     function shouldShowPopup(): bool {
         if (props.dnd || ShellState.anySidebarOpen())
             return false;
@@ -110,6 +134,7 @@ Singleton {
         path: `${Paths.state}/notifs.json`
         onLoaded: {
             const data = JSON.parse(text());
+            const loaded = [];
             for (const notif of data) {
                 const properties = Object.assign({}, notif);
 
@@ -118,9 +143,9 @@ Singleton {
                     properties.notificationId = properties.id;
 
                 delete properties.id;
-                root.list.push(notifComp.createObject(root, properties));
+                loaded.push(notifComp.createObject(root, properties));
             }
-            root.list.sort((a, b) => b.time - a.time);
+            root.list = [...root.list, ...loaded].sort((a, b) => b.time - a.time);
             root.loaded = true;
         }
         onLoadFailed: err => {
@@ -137,15 +162,13 @@ Singleton {
         name: "clearNotifs"
         description: "Clear all notifications"
         onPressed: {
-            for (const notif of root.list.slice())
-                notif.close();
+            root.closeAll(root.list);
         }
     }
 
     IpcHandler {
         function clear(): void {
-            for (const notif of root.list.slice())
-                notif.close();
+            root.closeAll(root.list);
         }
 
         function isDndEnabled(): bool {
