@@ -162,7 +162,14 @@ Singleton {
         const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=${lang}&format=json`;
 
         Requests.get(url, text => {
-            const json = JSON.parse(text);
+            let json;
+            try {
+                json = JSON.parse(text);
+            } catch (error) {
+                console.warn(lc, `Unable to parse geocoding response: ${error}`);
+                return;
+            }
+
             if (json.results && json.results.length > 0) {
                 const result = json.results[0];
                 loc = result.latitude + "," + result.longitude;
@@ -171,6 +178,8 @@ Singleton {
                 loc = "";
                 city = Tr.trCtx("Unknown city", "weather location unavailable");
             }
+        }, error => {
+            console.warn(lc, `Geocoding request failed: ${error}`);
         });
     }
 
@@ -180,50 +189,56 @@ Singleton {
             return;
 
         Requests.get(url, text => {
-            const json = JSON.parse(text);
-            if (!json.current || !json.daily)
-                return;
+            try {
+                const json = JSON.parse(text);
+                if (!json.current || !json.daily)
+                    return;
 
-            cc = {
-                weatherCode: json.current.weather_code,
-                tempC: json.current.temperature_2m,
-                feelsLikeC: json.current.apparent_temperature,
-                humidity: json.current.relative_humidity_2m,
-                windSpeed: json.current.wind_speed_10m,
-                isDay: json.current.is_day,
-                sunrise: json.daily.sunrise[0].replace("T", " "),
-                sunset: json.daily.sunset[0].replace("T", " ")
-            };
+                cc = {
+                    weatherCode: json.current.weather_code,
+                    tempC: json.current.temperature_2m,
+                    feelsLikeC: json.current.apparent_temperature,
+                    humidity: json.current.relative_humidity_2m,
+                    windSpeed: json.current.wind_speed_10m,
+                    isDay: json.current.is_day,
+                    sunrise: json.daily.sunrise[0].replace("T", " "),
+                    sunset: json.daily.sunset[0].replace("T", " ")
+                };
 
-            const forecastList = [];
-            for (let i = 0; i < json.daily.time.length; i++)
-                forecastList.push({
-                    date: json.daily.time[i].replace(/-/g, "/"),
-                    maxTempC: json.daily.temperature_2m_max[i],
-                    minTempC: json.daily.temperature_2m_min[i],
-                    weatherCode: json.daily.weather_code[i],
-                    icon: Icons.getWeatherIcon(json.daily.weather_code[i])
-                });
-            forecast = forecastList;
+                const forecastList = [];
+                for (let i = 0; i < json.daily.time.length; i++)
+                    forecastList.push({
+                        date: json.daily.time[i].replace(/-/g, "/"),
+                        maxTempC: json.daily.temperature_2m_max[i],
+                        minTempC: json.daily.temperature_2m_min[i],
+                        weatherCode: json.daily.weather_code[i],
+                        icon: Icons.getWeatherIcon(json.daily.weather_code[i])
+                    });
+                forecast = forecastList;
 
-            const hourlyList = [];
-            const now = new Date();
-            for (let i = 0; i < json.hourly.time.length; i++) {
-                const time = new Date(json.hourly.time[i].replace("T", " "));
+                const hourlyList = [];
+                const now = new Date();
+                for (let i = 0; i < json.hourly.time.length; i++) {
+                    const time = new Date(json.hourly.time[i].replace("T", " "));
 
-                if (time < now)
-                    continue;
+                    if (time < now)
+                        continue;
 
-                hourlyList.push({
-                    timestamp: json.hourly.time[i],
-                    hour: time.getHours(),
-                    tempC: Math.round(json.hourly.temperature_2m[i]),
-                    precipChance: json.hourly.precipitation_probability[i],
-                    weatherCode: json.hourly.weather_code[i],
-                    icon: Icons.getWeatherIcon(json.hourly.weather_code[i])
-                });
+                    hourlyList.push({
+                        timestamp: json.hourly.time[i],
+                        hour: time.getHours(),
+                        tempC: Math.round(json.hourly.temperature_2m[i]),
+                        precipChance: json.hourly.precipitation_probability[i],
+                        weatherCode: json.hourly.weather_code[i],
+                        icon: Icons.getWeatherIcon(json.hourly.weather_code[i])
+                    });
+                }
+                hourlyForecast = hourlyList;
+            } catch (error) {
+                console.warn(lc, `Unable to parse weather data: ${error}`);
             }
-            hourlyForecast = hourlyList;
+        }, error => {
+            console.warn(lc, `Weather request failed: ${error}`);
         });
     }
 
