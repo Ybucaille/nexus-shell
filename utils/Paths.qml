@@ -27,10 +27,12 @@ Singleton {
     }
 
     function absolutePath(path: string): string {
-        return toLocalFile(path.replace(/~|(\$({?)HOME(}?))+/, home));
+        return toLocalFile(path.replace(/^(~|(\$({?)HOME(}?))+)/, () => home));
     }
 
     function shortenHome(path: string): string {
-        return path.replace(home, "~");
+        if (home && (path === home || path.startsWith(`${home}/`)))
+            return `~${path.slice(home.length)}`;
+        return path;
     }
 }
