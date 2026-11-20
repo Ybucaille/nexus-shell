@@ -1249,7 +1249,7 @@ const defaultOpts = {
 };
 class Finder {
   constructor(list, ...optionsTuple) {
-    this.opts = Object.assign(defaultOpts, optionsTuple[0]);
+    this.opts = Object.assign({}, defaultOpts, optionsTuple[0]);
     this.items = list;
     this.runesList = list.map((item) => strToRunes(this.opts.selector(item).normalize()));
     this.algoFn = exactMatchNaive;
