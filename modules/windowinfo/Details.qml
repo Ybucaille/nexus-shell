@@ -55,20 +55,20 @@ ColumnLayout {
     Detail {
         icon: "location_searching"
         // TRANSLATORS: %1/%2 = x and y position in pixels
-        text: Tr.tr("Position: %1, %2").arg(root.client?.lastIpcObject.at[0] ?? -1).arg(root.client?.lastIpcObject.at[1] ?? -1)
+        text: Tr.tr("Position: %1, %2").arg(root.client?.lastIpcObject.at?.[0] ?? -1).arg(root.client?.lastIpcObject.at?.[1] ?? -1)
     }
 
     Detail {
         icon: "resize"
         // TRANSLATORS: %1/%2 = width and height in pixels; the x is a multiplication sign
-        text: Tr.tr("Size: %1 x %2").arg(root.client?.lastIpcObject.size[0] ?? -1).arg(root.client?.lastIpcObject.size[1] ?? -1)
+        text: Tr.tr("Size: %1 x %2").arg(root.client?.lastIpcObject.size?.[0] ?? -1).arg(root.client?.lastIpcObject.size?.[1] ?? -1)
         color: Colours.palette.m3tertiary
     }
 
     Detail {
         icon: "workspaces"
         // TRANSLATORS: %1 = workspace name, %2 = workspace id
-        text: Tr.tr("Workspace: %1 (%2)").arg(root.client?.workspace.name ?? -1).arg(root.client?.workspace.id ?? -1)
+        text: Tr.tr("Workspace: %1 (%2)").arg(root.client?.workspace?.name ?? -1).arg(root.client?.workspace?.id ?? -1)
         color: Colours.palette.m3secondary
     }
 
