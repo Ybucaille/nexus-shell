@@ -72,7 +72,7 @@ Item {
             captureSource: root.client?.wayland ?? null // qmllint disable unresolved-type
             live: true
 
-            constraintSize.width: root.client ? parent.height * Math.min(root.screen.width / root.screen.height, root.client?.lastIpcObject.size[0] / root.client?.lastIpcObject.size[1]) : parent.height
+            constraintSize.width: root.client ? parent.height * Math.min(root.screen.width / root.screen.height, (root.client.lastIpcObject.size?.[0] || root.screen.width) / (root.client.lastIpcObject.size?.[1] || root.screen.height)) : parent.height
             constraintSize.height: parent.height
         }
     }
@@ -91,8 +91,9 @@ Item {
                 return Tr.tr("No active client");
 
             const mon = client.monitor;
+            const at = client.lastIpcObject.at ?? [];
             // TRANSLATORS: %1 = window title, %2 = monitor name, %3/%4 = x/y position in pixels
-            return Tr.tr("%1 on monitor %2 at %3, %4").arg(client.title).arg(mon.name).arg(client.lastIpcObject.at[0]).arg(client.lastIpcObject.at[1]);
+            return Tr.tr("%1 on monitor %2 at %3, %4").arg(client.title).arg(mon?.name ?? "").arg(at[0] ?? -1).arg(at[1] ?? -1);
         }
     }
 }
