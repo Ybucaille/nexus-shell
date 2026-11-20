@@ -5,6 +5,7 @@
 #include <qjsondocument.h>
 #include <qlocalsocket.h>
 #include <qloggingcategory.h>
+#include <qtimer.h>
 #include <qvariant.h>
 
 #include "hyprdevices.hpp"
@@ -12,6 +13,8 @@
 namespace {
 
 Q_LOGGING_CATEGORY(lcHypr, "caelestia.services.hypr", QtInfoMsg)
+
+constexpr int k_requestTimeoutMs = 5000;
 
 } // namespace
 
@@ -116,7 +119,7 @@ void HyprExtras::applyOptions(const QVariantHash& options) {
 
 void HyprExtras::refreshOptions() {
     if (!m_optionsRefresh.isNull()) {
-        m_optionsRefresh->close();
+        cancelRequest(m_optionsRefresh);
     }
 
     m_optionsRefresh = makeRequestJson(u"descriptions"_s, [this](bool success, const QJsonDocument& response) {
@@ -146,7 +149,7 @@ void HyprExtras::refreshOptions() {
 
 void HyprExtras::refreshDevices() {
     if (!m_devicesRefresh.isNull()) {
-        m_devicesRefresh->close();
+        cancelRequest(m_devicesRefresh);
     }
 
     m_devicesRefresh = makeRequestJson(u"devices"_s, [this](bool success, const QJsonDocument& response) {
@@ -197,6 +200,11 @@ void HyprExtras::handleEvent(const QString& event) {
     }
 }
 
+void HyprExtras::cancelRequest(const SocketPtr& socket) {
+    socket->setProperty("cancelled", true);
+    socket->close();
+}
+
 HyprExtras::SocketPtr HyprExtras::makeRequestJson(
     const QString& request, const std::function<void(bool, QJsonDocument)>& callback) {
     return makeRequest(u"j/"_s + request, [this, request, callback](bool success, const QByteArray& response) {
@@ -229,22 +237,52 @@ HyprExtras::SocketPtr HyprExtras::makeRequest(
     }
 
     auto socket = SocketPtr::create(this);
+    auto buffer = QSharedPointer<QByteArray>::create();
+    auto done = QSharedPointer<bool>::create(false);
 
-    QObject::connect(socket.data(), &QLocalSocket::connected, this, [=, this]() {
-        QObject::connect(socket.data(), &QLocalSocket::readyRead, this, [socket, callback]() {
-            auto response = socket->readAll();
-            callback(true, std::move(response));
-            socket->close();
-        });
+    // Hyprland answers then closes the connection, and the reply can arrive in several chunks, so the callback only
+    // runs once, on the complete response
+    const auto finish = [socket, buffer, done, callback](bool success) {
+        if (*done) {
+            return;
+        }
+        *done = true;
+        callback(success, success ? *buffer : QByteArray());
+        socket->close();
+    };
 
+    QObject::connect(socket.data(), &QLocalSocket::connected, this, [socket, request]() {
         socket->write(request.toUtf8());
         socket->flush();
     });
 
-    QObject::connect(socket.data(), &QLocalSocket::errorOccurred, this, [=](QLocalSocket::LocalSocketError err) {
+    QObject::connect(socket.data(), &QLocalSocket::readyRead, this, [socket, buffer]() {
+        buffer->append(socket->readAll());
+    });
+
+    QObject::connect(socket.data(), &QLocalSocket::disconnected, this, [socket, finish]() {
+        if (!socket->property("cancelled").toBool()) {
+            finish(true);
+        }
+    });
+
+    QObject::connect(socket.data(), &QLocalSocket::errorOccurred, this, [socket, request, finish](auto err) {
+        if (socket->property("cancelled").toBool()) {
+            return;
+        }
+        if (err == QLocalSocket::PeerClosedError) {
+            finish(true);
+            return;
+        }
         qCWarning(lcHypr) << "makeRequest: error making request:" << err << "| request:" << request;
-        callback(false, {});
-        socket->close();
+        finish(false);
+    });
+
+    QTimer::singleShot(k_requestTimeoutMs, this, [socket, request, finish, done]() {
+        if (!*done && !socket->property("cancelled").toBool()) {
+            qCWarning(lcHypr) << "makeRequest: request timed out:" << request;
+            finish(false);
+        }
     });
 
     socket->connectToServer(m_requestSocket);

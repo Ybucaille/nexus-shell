@@ -58,6 +58,7 @@ private:
     void readEvent();
     void handleEvent(const QString& event);
 
+    static void cancelRequest(const SocketPtr& socket);
     SocketPtr makeRequestJson(const QString& request, const std::function<void(bool, QJsonDocument)>& callback);
     SocketPtr makeRequest(const QString& request, const std::function<void(bool, QByteArray)>& callback);
 };
