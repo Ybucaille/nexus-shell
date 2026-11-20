@@ -121,8 +121,15 @@ def parse_imports(lines: list[str]) -> tuple[int | None, int | None, list[str], 
     relative_imports: list[str] = []
     module_imports: list[tuple[str, int, int, str]] = []
 
+    in_block_comment = False
     for i, line in enumerate(lines):
         stripped = line.strip()
+        if in_block_comment:
+            in_block_comment = "*/" not in stripped
+            continue
+        if stripped.startswith("/*"):
+            in_block_comment = "*/" not in stripped
+            continue
         if not stripped or stripped.startswith("//") or stripped.startswith("pragma "):
             continue
         m = IMPORT_RE.match(stripped)
@@ -423,16 +430,20 @@ def fix_lines(lines: list[str]) -> list[str]:
 def fix_file(filepath: Path) -> bool:
     """Fix auto-fixable violations. Returns True if file was modified."""
     try:
-        text = filepath.read_text()
+        # newline="" keeps CRLF intact so --fix does not rewrite line endings
+        with open(filepath, encoding="utf-8", newline="") as f:
+            text = f.read()
     except (OSError, UnicodeDecodeError):
         return False
 
+    eol = "\r\n" if "\r\n" in text else "\n"
     lines = fix_lines(text.splitlines())
-    new_text = "\n".join(lines)
+    new_text = eol.join(lines)
     if text.endswith("\n"):
-        new_text += "\n"
+        new_text += eol
     if new_text != text:
-        filepath.write_text(new_text)
+        with open(filepath, "w", encoding="utf-8", newline="") as f:
+            f.write(new_text)
         return True
     return False
 
