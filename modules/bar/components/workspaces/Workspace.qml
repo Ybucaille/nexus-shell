@@ -226,25 +226,35 @@ Item {
 
                     required property var modelData
                     required property int index // Needed, LazyListView will fail to set it if it doesn't exist
-                    readonly property string appIconName: DesktopEntries.heuristicLookup(modelData.lastIpcObject.class)?.icon ?? ""
+                    readonly property bool hasAppIcon: (appIconLoader.item as IconImage)?.status === Image.Ready
 
                     grade: 0
                     horizontalAlignment: Text.AlignHCenter
                     text: Icons.getAppCategoryIcon(modelData.lastIpcObject.class, "terminal")
 
                     // Keep the category glyph as a fallback and preserve its layout metrics.
-                    color: appIcon.status === Image.Ready ? "transparent" : root.onOtherMonitor ? root.offMonitorColour : Colours.palette.m3onSurfaceVariant
+                    color: hasAppIcon ? "transparent" : root.onOtherMonitor ? root.offMonitorColour : Colours.palette.m3onSurfaceVariant
                     opacity: LazyListView.adding || LazyListView.removing ? 0 : 1
 
-                    IconImage {
-                        id: appIcon
+                    Loader {
+                        id: appIconLoader
 
                         anchors.centerIn: parent
-                        implicitSize: Math.min(win.width, win.height)
-                        source: win.appIconName ? Quickshell.iconPath(win.appIconName, true) : ""
-                        asynchronous: true
-                        visible: status === Image.Ready
-                        opacity: root.onOtherMonitor ? 0.5 : 1
+                        active: root.Config.bar.workspaces.showAppIcons
+
+                        sourceComponent: IconImage {
+                            // Look up again when desktop entries are (re)loaded, e.g. at startup or after an install.
+                            readonly property string iconName: {
+                                DesktopEntries.applications.values;
+                                return DesktopEntries.heuristicLookup(win.modelData.lastIpcObject.class)?.icon ?? "";
+                            }
+
+                            implicitSize: Math.min(win.width, win.height)
+                            source: iconName ? Quickshell.iconPath(iconName, true) : ""
+                            asynchronous: true
+                            visible: status === Image.Ready
+                            opacity: root.onOtherMonitor ? 0.5 : 1
+                        }
                     }
 
                     Behavior on opacity {
