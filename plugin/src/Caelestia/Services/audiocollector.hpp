@@ -7,6 +7,8 @@
 #include <spa/param/audio/format-utils.h>
 
 #include <atomic>
+#include <memory>
+#include <mutex>
 #include <stop_token>
 #include <thread>
 
@@ -54,6 +56,7 @@ private:
     pw_main_loop* m_loop;
     pw_stream* m_stream;
     spa_source* m_timer;
+    spa_source* m_quitEvent;
     bool m_idle;
 
     std::stop_token m_token;
@@ -78,11 +81,19 @@ public:
     quint32 readChunk(float* out, quint32 count = 0);
     quint32 readChunk(double* out, quint32 count = 0);
 
+    // Called by the worker thread so stop() can wake its loop
+    void registerLoop(pw_loop* loop, spa_source* quitEvent);
+    void unregisterLoop();
+
 private:
     explicit AudioCollector(QObject* parent = nullptr);
     ~AudioCollector() override;
 
     std::jthread m_thread;
+    std::shared_ptr<std::atomic<bool>> m_threadDone;
+    std::mutex m_loopMutex;
+    pw_loop* m_loop = nullptr;
+    spa_source* m_quitEvent = nullptr;
     util::RingBuffer<float> m_samples;
     ac::SpinLock m_samplesLock;
     util::RingBuffer<float> m_pending; // Writer thread only, holds chunks which arrived while a reader had the lock
@@ -91,6 +102,7 @@ private:
 
     template <typename T> quint32 readLatest(T* out, quint32 count);
 
+    void wakeLoop();
     void reload();
     void start() override;
     void stop() override;

@@ -5,9 +5,11 @@
 #include <pipewire/pipewire.h>
 
 #include <algorithm>
+#include <chrono>
 #include <mutex>
 #include <span>
 #include <stop_token>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -25,6 +27,7 @@ PipeWireWorker::PipeWireWorker(std::stop_token token, AudioCollector* collector)
     : m_loop(nullptr)
     , m_stream(nullptr)
     , m_timer(nullptr)
+    , m_quitEvent(nullptr)
     , m_idle(true)
     , m_token(std::move(token))
     , m_collector(collector) {
@@ -33,6 +36,20 @@ PipeWireWorker::PipeWireWorker(std::stop_token token, AudioCollector* collector)
     m_loop = pw_main_loop_new(nullptr);
     if (!m_loop) {
         qCWarning(lcAcWorker) << "init: failed to create PipeWire main loop";
+        pw_deinit();
+        return;
+    }
+
+    // Lets AudioCollector::stop() wake the loop from another thread, whatever the stream state
+    m_quitEvent = pw_loop_add_event(
+        pw_main_loop_get_loop(m_loop),
+        [](void* data, uint64_t) {
+            pw_main_loop_quit(static_cast<PipeWireWorker*>(data)->m_loop);
+        },
+        this);
+    if (!m_quitEvent) {
+        qCWarning(lcAcWorker) << "init: failed to create quit event";
+        pw_main_loop_destroy(m_loop);
         pw_deinit();
         return;
     }
@@ -98,7 +115,14 @@ PipeWireWorker::PipeWireWorker(std::stop_token token, AudioCollector* collector)
         return;
     }
 
+    collector->registerLoop(pw_main_loop_get_loop(m_loop), m_quitEvent);
+    if (m_token.stop_requested()) {
+        pw_loop_signal_event(pw_main_loop_get_loop(m_loop), m_quitEvent);
+    }
+
     pw_main_loop_run(m_loop);
+
+    collector->unregisterLoop();
 
     pw_stream_destroy(m_stream);
     pw_main_loop_destroy(m_loop);
@@ -239,15 +263,56 @@ void AudioCollector::start() {
 
     clearBuffer();
 
-    m_thread = std::jthread([this](std::stop_token token) {
-        const PipeWireWorker worker(std::move(token), this);
+    auto done = std::make_shared<std::atomic<bool>>(false);
+    m_threadDone = done;
+    m_thread = std::jthread([this, done](std::stop_token token) {
+        {
+            const PipeWireWorker worker(std::move(token), this);
+        }
+        done->store(true, std::memory_order_release);
     });
 }
 
 void AudioCollector::stop() {
-    if (m_thread.joinable()) {
-        m_thread.request_stop();
-        m_thread.join();
+    if (!m_thread.joinable()) {
+        return;
+    }
+
+    m_thread.request_stop();
+    wakeLoop();
+
+    // Never block the caller (the UI thread) forever if the PipeWire loop does not return
+    constexpr auto timeout = std::chrono::seconds(2);
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (!m_threadDone->load(std::memory_order_acquire)) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            qCWarning(lcAcWorker) << "stop: PipeWire loop did not exit within" << timeout.count()
+                                  << "s, detaching the thread";
+            m_thread.detach();
+            return;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    m_thread.join();
+}
+
+void AudioCollector::registerLoop(pw_loop* loop, spa_source* quitEvent) {
+    const std::lock_guard lock(m_loopMutex);
+    m_loop = loop;
+    m_quitEvent = quitEvent;
+}
+
+void AudioCollector::unregisterLoop() {
+    const std::lock_guard lock(m_loopMutex);
+    m_loop = nullptr;
+    m_quitEvent = nullptr;
+}
+
+void AudioCollector::wakeLoop() {
+    const std::lock_guard lock(m_loopMutex);
+    if (m_loop && m_quitEvent) {
+        pw_loop_signal_event(m_loop, m_quitEvent);
     }
 }
 
