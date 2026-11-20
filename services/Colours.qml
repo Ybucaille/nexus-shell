@@ -61,7 +61,16 @@ Singleton {
 
     function load(data: string, isPreview: bool): void {
         const colours = isPreview ? preview : current;
-        const scheme = JSON.parse(data);
+        let scheme;
+        try {
+            scheme = JSON.parse(data);
+        } catch (e) {
+            console.warn("Colours: failed to parse scheme:", e);
+            return;
+        }
+
+        if (!scheme?.colours)
+            return;
 
         if (!isPreview) {
             root.scheme = scheme.name;
