@@ -32,7 +32,7 @@ Singleton {
 
     // Every change to `list` re-runs the bindings that filter it, so drop
     // several notifications with one update instead of one each.
-    function closeAll(notifs: list<var>): void {
+    function closeAll(notifs: list<NotifData>): void {
         // `closed` is only set once a notification has left the list,
         // otherwise each change would re-run `notClosed` as well.
         const tracked = new Set(root.list);
