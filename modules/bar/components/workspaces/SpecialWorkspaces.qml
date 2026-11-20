@@ -15,7 +15,9 @@ Item {
 
     required property HyprlandMonitor monitor
 
-    readonly property int activeSpecialId: monitor?.lastIpcObject.specialWorkspace?.id ?? 0
+    // Recent Hyprland only reports the name (special:xxx) of the active special workspace, not its id
+    readonly property string activeSpecialName: monitor?.lastIpcObject.specialWorkspace?.name ?? ""
+    readonly property int activeSpecialId: activeSpecialName ? (Hypr.workspaces.values.find(w => w.name === activeSpecialName)?.id ?? 0) : 0
     readonly property var wsIds: {
         const allMonitors = !Config.bar.workspaces.perMonitor;
         return Hypr.workspaces.values.filter(w => w.name.startsWith("special:") && (allMonitors || w.monitor === root.monitor)).map(w => w.id);
@@ -146,6 +148,7 @@ Item {
 
     LazyListView {
         id: view
+
         // Match normal workspaces: preserve the colours of application icons.
         z: 1
 
