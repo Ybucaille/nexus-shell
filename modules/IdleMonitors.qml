@@ -8,6 +8,7 @@ import Quickshell.Services.UPower
 import Caelestia.Config
 import Caelestia.Services
 import qs.services
+import qs.services as Services
 
 Scope {
     id: root
@@ -16,6 +17,11 @@ Scope {
     readonly property bool hasPlayer: Players.list.some(p => p.isPlaying)
     readonly property bool isCharging: !UPower.onBattery
     readonly property bool enabled: {
+        // The inhibitor surface only counts while Hyprland draws it, so a
+        // fullscreen window can hide it: honour Keep awake ourselves.
+        // Qualified, as Quickshell.Wayland also has an IdleInhibitor type.
+        if (Services.IdleInhibitor.enabled)
+            return false;
         if (GlobalConfig.general.idle.inhibitWhenAudio && hasPlayer)
             return false;
         if (GlobalConfig.general.idle.inhibitWhenCharging && isCharging)
