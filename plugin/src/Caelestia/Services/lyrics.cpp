@@ -638,6 +638,8 @@ QNetworkReply* Lyrics::getJson(const QUrl& url, const QHash<QByteArray, QByteArr
     QNetworkRequest req(url);
     req.setTransferTimeout(k_transferTimeoutMs);
     req.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::AlwaysNetwork);
+    // Qt 6.12.0 can crash in QHttp2Stream::handleHEADERS
+    req.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
     req.setRawHeader("Cache-Control"_ba, "no-cache, no-store"_ba);
     req.setRawHeader("Pragma"_ba, "no-cache"_ba);
     req.setRawHeader("Connection"_ba, "close"_ba);
