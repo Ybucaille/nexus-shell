@@ -23,6 +23,8 @@ using Qt::StringLiterals::operator""_ba;
 
 namespace {
 
+constexpr int k_transferTimeoutMs = 10000;
+
 QVariantMap responseMetadata(const QNetworkReply* reply) {
     QVariantMap headers;
 
@@ -51,6 +53,7 @@ void Requests::get(const QUrl& url, const QJSValue& onSuccess, const QJSValue& o
     request.setAttribute(QNetworkRequest::CookieSaveControlAttribute, QNetworkRequest::Manual);
     // Qt 6.12.0 can crash in QHttp2Stream::handleHEADERS
     request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
+    request.setTransferTimeout(k_transferTimeoutMs);
     request.setRawHeader("Cache-Control"_ba, "no-cache, no-store"_ba);
     request.setRawHeader("Pragma"_ba, "no-cache"_ba);
     request.setRawHeader("Connection"_ba, "close"_ba);
