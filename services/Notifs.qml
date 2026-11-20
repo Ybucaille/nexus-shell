@@ -133,7 +133,21 @@ Singleton {
         printErrors: false
         path: `${Paths.state}/notifs.json`
         onLoaded: {
-            const data = JSON.parse(text());
+            let data;
+            try {
+                data = JSON.parse(text());
+            } catch (e) {
+                // Keep the file untouched until the next real change and carry on with an empty history
+                console.warn("Notifs: failed to parse notification history:", e);
+                root.loaded = true;
+                return;
+            }
+
+            if (!Array.isArray(data)) {
+                root.loaded = true;
+                return;
+            }
+
             const loaded = [];
             for (const notif of data) {
                 const properties = Object.assign({}, notif);
