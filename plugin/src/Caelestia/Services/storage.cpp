@@ -91,6 +91,35 @@ QStringList resolveByDevt(uint major, uint minor, int depth) {
     return resolveAtNode(sysfsRealPath(major, minor), depth);
 }
 
+[[nodiscard]] bool isNetworkFs(QByteArrayView fsType) {
+    static constexpr const char* k_network[] = {
+        "nfs", "nfs4", "cifs", "smb3", "smbfs", "ncpfs", "afs", "ceph", "glusterfs", "9p",
+    };
+    for (const char* n : k_network) {
+        if (fsType == QByteArrayView(n)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Mount paths in mountinfo escape space, tab, newline and backslash as octal (e.g. \040)
+[[nodiscard]] QByteArray unescapeMountPath(const QByteArray& raw) {
+    QByteArray out;
+    out.reserve(raw.size());
+    for (qsizetype i = 0; i < raw.size(); ++i) {
+        if (raw.at(i) == '\\' && i + 3 < raw.size() && raw.at(i + 1) >= '0' && raw.at(i + 1) <= '3'
+            && raw.at(i + 2) >= '0' && raw.at(i + 2) <= '7' && raw.at(i + 3) >= '0' && raw.at(i + 3) <= '7') {
+            out.append(static_cast<char>(
+                ((raw.at(i + 1) - '0') << 6) | ((raw.at(i + 2) - '0') << 3) | (raw.at(i + 3) - '0')));
+            i += 3;
+        } else {
+            out.append(raw.at(i));
+        }
+    }
+    return out;
+}
+
 } // namespace
 
 Storage::Storage(QObject* parent)
@@ -204,11 +233,49 @@ QStringList Storage::resolveToPhysicalDisks(const QString& devicePath) {
     return resolveByDevt(major(st.st_rdev), minor(st.st_rdev));
 }
 
+// Mount points worth querying, from /proc/self/mountinfo. Reading it costs no statvfs, so pseudo, FUSE, autofs and
+// network mounts (which can hang) are dropped before anything touches the filesystem.
+QStringList Storage::candidateMountPaths() {
+    QFile f(u"/proc/self/mountinfo"_s);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return {};
+    }
+
+    QStringList paths;
+    while (!f.atEnd()) {
+        const QByteArray line = f.readLine().trimmed();
+        const auto sep = line.indexOf(" - ");
+        if (sep < 0) {
+            continue;
+        }
+
+        const auto pre = line.left(sep).split(' ');
+        const auto post = line.mid(sep + 3).split(' ');
+        if (pre.size() < 5 || post.isEmpty()) {
+            continue;
+        }
+
+        const QByteArray& fsType = post.first();
+        if (isPseudoFs(QByteArrayView(fsType)) || isNetworkFs(QByteArrayView(fsType))) {
+            continue;
+        }
+
+        const QString path = QString::fromLocal8Bit(unescapeMountPath(pre.at(4)));
+        if (!paths.contains(path)) {
+            paths.append(path);
+        }
+    }
+    return paths;
+}
+
 QHash<QByteArray, Storage::DeviceEntry> Storage::collectDevices() {
     QHash<QByteArray, DeviceEntry> byDevice;
 
-    const auto mountedVols = QStorageInfo::mountedVolumes();
-    for (const QStorageInfo& v : mountedVols) {
+    const auto paths = candidateMountPaths();
+    for (const QString& path : paths) {
+        const QStorageInfo v(path);
+        if (v.rootPath() != path)
+            continue;
         if (!v.isReady() || !v.isValid() || v.bytesTotal() <= 0)
             continue;
         if (isPseudoFs(QByteArrayView(v.fileSystemType())))

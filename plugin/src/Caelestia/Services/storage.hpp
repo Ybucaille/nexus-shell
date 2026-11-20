@@ -62,6 +62,7 @@ private:
         QByteArray fsType;
     };
 
+    [[nodiscard]] static QStringList candidateMountPaths();
     [[nodiscard]] static QHash<QByteArray, DeviceEntry> collectDevices();
     [[nodiscard]] static AccumHash foldToDisks(const QHash<QByteArray, DeviceEntry>& byDevice);
 
