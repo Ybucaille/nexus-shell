@@ -16,16 +16,138 @@ ColumnLayout {
     required property PopoutState popouts
 
     property string connectingToSsid: ""
-    property string view: "wireless" // "wireless" or "ethernet"
+    // Ethernet comes first when it is active, Wi-Fi stays reachable below it
+    property bool showEthernet
+    property bool showWireless: true
     property var passwordNetwork: null
     property bool showPasswordDialog: false
 
     spacing: Tokens.spacing.small
     width: Tokens.sizes.bar.networkWidth
 
+    // Ethernet section
+    StyledText {
+        visible: root.showEthernet
+        Layout.preferredHeight: visible ? implicitHeight : 0
+        Layout.topMargin: visible ? Tokens.padding.medium : 0
+        Layout.rightMargin: Tokens.padding.extraSmall
+        text: Tr.tr("Ethernet")
+        font: Tokens.font.body.builders.medium.weight(Font.Medium).build()
+    }
+
+    StyledText {
+        visible: root.showEthernet
+        Layout.preferredHeight: visible ? implicitHeight : 0
+        Layout.topMargin: visible ? Tokens.spacing.small : 0
+        Layout.rightMargin: Tokens.padding.extraSmall
+        text: Tr.trN("%n device available", "%n devices available", Nmcli.ethernetDevices.length)
+        color: Colours.palette.m3onSurfaceVariant
+        font: Tokens.font.body.small
+    }
+
+    Repeater {
+        visible: root.showEthernet
+        model: ScriptModel {
+            values: [...Nmcli.ethernetDevices].sort((a, b) => {
+                if (a.connected !== b.connected)
+                    return b.connected - a.connected;
+                return (a.iface || "").localeCompare(b.iface || "");
+            }).slice(0, 8)
+        }
+
+        RowLayout {
+            id: ethernetItem
+
+            required property var modelData
+            readonly property bool loading: false
+
+            visible: root.showEthernet
+            Layout.preferredHeight: visible ? implicitHeight : 0
+            Layout.fillWidth: true
+            Layout.rightMargin: Tokens.padding.extraSmall
+            spacing: Tokens.spacing.small
+
+            opacity: 0
+            scale: 0.7
+
+            Component.onCompleted: {
+                opacity = 1;
+                scale = 1;
+            }
+
+            Behavior on opacity {
+                Anim {
+                    type: Anim.DefaultEffects
+                }
+            }
+
+            Behavior on scale {
+                Anim {}
+            }
+
+            MaterialIcon {
+                text: "cable"
+                color: ethernetItem.modelData.connected ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
+            }
+
+            StyledText {
+                Layout.leftMargin: Tokens.spacing.extraSmall
+                Layout.rightMargin: Tokens.spacing.extraSmall
+                Layout.fillWidth: true
+                text: ethernetItem.modelData.iface || Tr.trCtx("Unknown", "unknown network interface")
+                elide: Text.ElideRight
+                font: Tokens.font.body.builders.medium.weight(ethernetItem.modelData.connected ? Font.Medium : Font.Normal).build()
+                color: ethernetItem.modelData.connected ? Colours.palette.m3primary : Colours.palette.m3onSurface
+            }
+
+            StyledRect {
+                implicitWidth: implicitHeight
+                implicitHeight: connectIcon.implicitHeight + Tokens.padding.extraSmall
+
+                radius: Tokens.rounding.full
+                color: Qt.alpha(Colours.palette.m3primary, ethernetItem.modelData.connected ? 1 : 0)
+
+                CircularIndicator {
+                    anchors.fill: parent
+                    running: ethernetItem.loading
+                }
+
+                StateLayer {
+                    color: ethernetItem.modelData.connected ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
+                    disabled: ethernetItem.loading
+
+                    onClicked: {
+                        if (ethernetItem.modelData.connected && ethernetItem.modelData.connection) {
+                            Nmcli.disconnectEthernet(ethernetItem.modelData.connection, () => {});
+                        } else {
+                            Nmcli.connectEthernet(ethernetItem.modelData.connection || "", ethernetItem.modelData.iface || "", () => {});
+                        }
+                    }
+                }
+
+                MaterialIcon {
+                    id: connectIcon
+
+                    anchors.centerIn: parent
+                    animate: true
+                    text: ethernetItem.modelData.connected ? "link_off" : "link"
+                    color: ethernetItem.modelData.connected ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
+
+                    opacity: ethernetItem.loading ? 0 : 1
+
+                    Behavior on opacity {
+                        Anim {
+                            type: Anim.DefaultEffects
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Wireless section
     StyledText {
-        visible: root.view === "wireless"
+        visible: root.showWireless
         Layout.preferredHeight: visible ? implicitHeight : 0
         Layout.topMargin: visible ? Tokens.padding.medium : 0
         Layout.rightMargin: Tokens.padding.extraSmall
@@ -34,7 +156,7 @@ ColumnLayout {
     }
 
     Toggle {
-        visible: root.view === "wireless"
+        visible: root.showWireless
         Layout.preferredHeight: visible ? implicitHeight : 0
         label: Tr.trCtx("Enabled", "toggle label")
         checked: Nmcli.wifiEnabled
@@ -42,7 +164,7 @@ ColumnLayout {
     }
 
     StyledText {
-        visible: root.view === "wireless"
+        visible: root.showWireless
         Layout.preferredHeight: visible ? implicitHeight : 0
         Layout.topMargin: visible ? Tokens.spacing.small : 0
         Layout.rightMargin: Tokens.padding.extraSmall
@@ -52,7 +174,7 @@ ColumnLayout {
     }
 
     Repeater {
-        visible: root.view === "wireless"
+        visible: root.showWireless
         model: ScriptModel {
             values: [...Nmcli.networks].sort((a, b) => {
                 if (a.active !== b.active)
@@ -68,7 +190,7 @@ ColumnLayout {
             readonly property bool isConnecting: root.connectingToSsid === modelData.ssid
             readonly property bool loading: networkItem.isConnecting
 
-            visible: root.view === "wireless"
+            visible: root.showWireless
             Layout.preferredHeight: visible ? implicitHeight : 0
             Layout.fillWidth: true
             Layout.rightMargin: Tokens.padding.extraSmall
@@ -168,7 +290,7 @@ ColumnLayout {
     }
 
     StyledRect {
-        visible: root.view === "wireless"
+        visible: root.showWireless
         Layout.preferredHeight: visible ? implicitHeight : 0
         Layout.topMargin: visible ? Tokens.spacing.small : 0
         Layout.fillWidth: true
@@ -218,126 +340,6 @@ ColumnLayout {
             bgColour: "transparent"
             implicitSize: parent.implicitHeight - Tokens.padding.large
             running: Nmcli.scanning
-        }
-    }
-
-    // Ethernet section
-    StyledText {
-        visible: root.view === "ethernet"
-        Layout.preferredHeight: visible ? implicitHeight : 0
-        Layout.topMargin: visible ? Tokens.padding.medium : 0
-        Layout.rightMargin: Tokens.padding.extraSmall
-        text: Tr.tr("Ethernet")
-        font: Tokens.font.body.builders.medium.weight(Font.Medium).build()
-    }
-
-    StyledText {
-        visible: root.view === "ethernet"
-        Layout.preferredHeight: visible ? implicitHeight : 0
-        Layout.topMargin: visible ? Tokens.spacing.small : 0
-        Layout.rightMargin: Tokens.padding.extraSmall
-        text: Tr.trN("%n device available", "%n devices available", Nmcli.ethernetDevices.length)
-        color: Colours.palette.m3onSurfaceVariant
-        font: Tokens.font.body.small
-    }
-
-    Repeater {
-        visible: root.view === "ethernet"
-        model: ScriptModel {
-            values: [...Nmcli.ethernetDevices].sort((a, b) => {
-                if (a.connected !== b.connected)
-                    return b.connected - a.connected;
-                return (a.iface || "").localeCompare(b.iface || "");
-            }).slice(0, 8)
-        }
-
-        RowLayout {
-            id: ethernetItem
-
-            required property var modelData
-            readonly property bool loading: false
-
-            visible: root.view === "ethernet"
-            Layout.preferredHeight: visible ? implicitHeight : 0
-            Layout.fillWidth: true
-            Layout.rightMargin: Tokens.padding.extraSmall
-            spacing: Tokens.spacing.small
-
-            opacity: 0
-            scale: 0.7
-
-            Component.onCompleted: {
-                opacity = 1;
-                scale = 1;
-            }
-
-            Behavior on opacity {
-                Anim {
-                    type: Anim.DefaultEffects
-                }
-            }
-
-            Behavior on scale {
-                Anim {}
-            }
-
-            MaterialIcon {
-                text: "cable"
-                color: ethernetItem.modelData.connected ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
-            }
-
-            StyledText {
-                Layout.leftMargin: Tokens.spacing.extraSmall
-                Layout.rightMargin: Tokens.spacing.extraSmall
-                Layout.fillWidth: true
-                text: ethernetItem.modelData.iface || Tr.trCtx("Unknown", "unknown network interface")
-                elide: Text.ElideRight
-                font: Tokens.font.body.builders.medium.weight(ethernetItem.modelData.connected ? Font.Medium : Font.Normal).build()
-                color: ethernetItem.modelData.connected ? Colours.palette.m3primary : Colours.palette.m3onSurface
-            }
-
-            StyledRect {
-                implicitWidth: implicitHeight
-                implicitHeight: connectIcon.implicitHeight + Tokens.padding.extraSmall
-
-                radius: Tokens.rounding.full
-                color: Qt.alpha(Colours.palette.m3primary, ethernetItem.modelData.connected ? 1 : 0)
-
-                CircularIndicator {
-                    anchors.fill: parent
-                    running: ethernetItem.loading
-                }
-
-                StateLayer {
-                    color: ethernetItem.modelData.connected ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
-                    disabled: ethernetItem.loading
-
-                    onClicked: {
-                        if (ethernetItem.modelData.connected && ethernetItem.modelData.connection) {
-                            Nmcli.disconnectEthernet(ethernetItem.modelData.connection, () => {});
-                        } else {
-                            Nmcli.connectEthernet(ethernetItem.modelData.connection || "", ethernetItem.modelData.iface || "", () => {});
-                        }
-                    }
-                }
-
-                MaterialIcon {
-                    id: connectIcon
-
-                    anchors.centerIn: parent
-                    animate: true
-                    text: ethernetItem.modelData.connected ? "link_off" : "link"
-                    color: ethernetItem.modelData.connected ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
-
-                    opacity: ethernetItem.loading ? 0 : 1
-
-                    Behavior on opacity {
-                        Anim {
-                            type: Anim.DefaultEffects
-                        }
-                    }
-                }
-            }
         }
     }
 
