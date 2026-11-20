@@ -34,7 +34,7 @@ MouseArea {
     // Open upwards instead when the menu would overflow the bottom and there is room above
     readonly property bool flipUp: {
         watcher.transform; // mapToItem is not reactive so this forces updates
-        if (attachSideY !== Menu.Bottom || thisSideY !== Menu.Top)
+        if (!parent || attachSideY !== Menu.Bottom || thisSideY !== Menu.Top)
             return false;
         const item = attachTo;
         const below = item.mapToItem(parent, 0, item.height).y + marginY;
@@ -50,7 +50,7 @@ MouseArea {
     parent: {
         const win = QsWindow.window;
         const contentWin = win as ContentWindow; // If inside the drawer content window, put it inside the interaction wrapper so hover works
-        return contentWin ? contentWin.interactionWrapper : (win as QsWindow).contentItem;
+        return contentWin ? contentWin.interactionWrapper : (win as QsWindow)?.contentItem ?? null;
     }
     anchors.fill: parent
 
