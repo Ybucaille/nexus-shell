@@ -12,10 +12,18 @@ Scope {
     readonly property list<var> warnLevels: [...GlobalConfig.general.battery.warnLevels.values].sort((a, b) => a.level - b.level)
     property real lastPercentage: 100
 
+    function cancelHibernate(): void {
+        if (!hibernateTimer.running)
+            return;
+        hibernateTimer.stop();
+        Toaster.toast(Tr.tr("Hibernation cancelled"), Tr.tr("Charger plugged in"), "power");
+    }
+
     function handleBatteryWarnings(): void {
         const p = UPower.displayDevice.percentage * 100;
 
         if (!UPower.onBattery) {
+            root.cancelHibernate();
             root.lastPercentage = p;
             return;
         }
@@ -47,6 +55,7 @@ Scope {
                     Toaster.toast(Tr.tr("Charger unplugged"), Tr.tr("Battery is discharging"), "power_off");
                 root.handleBatteryWarnings();
             } else {
+                root.cancelHibernate();
                 if (GlobalConfig.utilities.toasts.chargingChanged)
                     Toaster.toast(Tr.tr("Charger plugged in"), Tr.tr("Battery is charging"), "power");
                 root.lastPercentage = 100;
@@ -80,6 +89,9 @@ Scope {
         id: hibernateTimer
 
         interval: 5000
-        onTriggered: SessionManager.hibernate()
+        onTriggered: {
+            if (UPower.onBattery)
+                SessionManager.hibernate();
+        }
     }
 }
