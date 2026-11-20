@@ -21,7 +21,7 @@ Singleton {
     property string uptimeShort
     readonly property string user: Quickshell.env("USER")
     readonly property string wm: Quickshell.env("XDG_CURRENT_DESKTOP") || Quickshell.env("XDG_SESSION_DESKTOP")
-    readonly property string shell: Quickshell.env("SHELL").split("/").pop()
+    readonly property string shell: (Quickshell.env("SHELL") ?? "").split("/").pop()
 
     property string kernel
     property string hostname
@@ -52,7 +52,7 @@ Singleton {
         onLoaded: {
             const lines = text().split("\n");
 
-            const fd = key => lines.find(l => l.startsWith(`${key}=`))?.split("=")[1].replace(/"/g, "") ?? "";
+            const fd = key => lines.find(l => l.startsWith(`${key}=`))?.split("=").slice(1).join("=").replace(/"/g, "") ?? "";
 
             root.osName = fd("NAME");
             root.osPrettyName = fd("PRETTY_NAME");
