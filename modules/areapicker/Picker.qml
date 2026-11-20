@@ -205,8 +205,12 @@ MouseArea {
         command: ["hyprctl", "cursorpos", "-j"]
         stdout: StdioCollector {
             onStreamFinished: {
-                const pos = JSON.parse(text);
-                root.checkClientRects(pos.x - root.screen.x, pos.y - root.screen.y);
+                try {
+                    const pos = JSON.parse(text);
+                    root.checkClientRects(pos.x - root.screen.x, pos.y - root.screen.y);
+                } catch (e) {
+                    console.warn("Area picker: failed to parse cursor position:", e);
+                }
             }
         }
     }
