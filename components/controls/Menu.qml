@@ -31,6 +31,20 @@ MouseArea {
     property MenuItem active: items[0] ?? null
     property bool expanded
 
+    // Open upwards instead when the menu would overflow the bottom and there is room above
+    readonly property bool flipUp: {
+        watcher.transform; // mapToItem is not reactive so this forces updates
+        if (attachSideY !== Menu.Bottom || thisSideY !== Menu.Top)
+            return false;
+        const item = attachTo;
+        const below = item.mapToItem(parent, 0, item.height).y + marginY;
+        const above = item.mapToItem(parent, 0, 0).y - marginY;
+        return below + menu.implicitHeight > parent.height && above - menu.implicitHeight >= 0;
+    }
+    readonly property int effAttachSideY: flipUp ? Menu.Top : attachSideY
+    readonly property int effThisSideY: flipUp ? Menu.Bottom : thisSideY
+    readonly property real effMarginY: flipUp ? -marginY : marginY
+
     signal itemSelected(item: MenuItem)
 
     parent: {
@@ -75,10 +89,10 @@ MouseArea {
         y: {
             watcher.transform; // mapToItem is not reactive so this forces updates
             const item = root.attachTo;
-            let off = root.attachSideY === Menu.Top ? 0 : item.height;
-            if (root.thisSideY === Menu.Bottom)
+            let off = root.effAttachSideY === Menu.Top ? 0 : item.height;
+            if (root.effThisSideY === Menu.Bottom)
                 off -= height;
-            return item.mapToItem(root.parent, 0, off).y + root.marginY;
+            return item.mapToItem(root.parent, 0, off).y + root.effMarginY;
         }
 
         radius: Tokens.rounding.large
@@ -89,7 +103,7 @@ MouseArea {
 
         transform: Scale {
             yScale: root.expanded ? 1 : 0.1
-            origin.y: root.thisSideY === Menu.Bottom ? menu.height : 0
+            origin.y: root.effThisSideY === Menu.Bottom ? menu.height : 0
 
             Behavior on yScale {
                 Anim {}
