@@ -21,9 +21,42 @@ StyledListView {
     readonly property string requestedState: stateForText(search.text)
     readonly property string displayState: stateForText(displayText)
 
+    // One application search per keystroke: routing needs it for the Google fallback and the results reuse it.
+    // displayText only ever catches up with search.text, so its results are the last ones searched for it.
+    readonly property var requestedApps: appsForText(search.text)
+    property var displayApps: []
+
     function syncDisplayText(): void {
         if (screenState.launcher && requestedState === displayState)
             displayText = search.text;
+    }
+
+    function selectedItem(): Item {
+        // Transitions retain old rows, and ListView may update after the model.
+        if (displayText !== search.text || transitions[0].running)
+            return null;
+
+        const item = currentItem;
+        return item && item.modelData === model.values[currentIndex] ? item : null;
+    }
+
+    function syncDisplayApps(): void {
+        if (displayText === search.text)
+            displayApps = requestedApps;
+    }
+
+    function appsForText(text: string): var {
+        if (text.startsWith(GlobalConfig.launcher.actionPrefix) || WebSearch.parse(text))
+            return [];
+        return Apps.search(text);
+    }
+
+    function cachedApps(text: string): var {
+        if (text === search.text)
+            return requestedApps;
+        if (text === displayText)
+            return displayApps;
+        return appsForText(text);
     }
 
     function stateForText(text: string): string {
@@ -35,6 +68,12 @@ StyledListView {
 
             return "actions";
         }
+
+        if (WebSearch.parse(text))
+            return "web";
+
+        if (text.trim() && cachedApps(text).length === 0)
+            return "web";
 
         return "apps";
     }
@@ -49,8 +88,13 @@ StyledListView {
             return Schemes.query(text);
         case "variant":
             return M3Variants.query(text);
+        case "web":
+            {
+                const result = WebSearch.parse(text) ?? WebSearch.fallback(text);
+                return result ? [result] : [];
+            }
         default:
-            return Apps.search(text);
+            return cachedApps(text);
         }
     }
 
@@ -89,7 +133,12 @@ StyledListView {
             Schemes.reload();
     }
 
-    Component.onCompleted: displayText = search.text
+    onRequestedAppsChanged: syncDisplayApps()
+    onDisplayTextChanged: syncDisplayApps()
+    Component.onCompleted: {
+        displayText = search.text;
+        syncDisplayApps();
+    }
 
     states: [
         State {
@@ -125,6 +174,13 @@ StyledListView {
 
             PropertyChanges {
                 root.delegate: variantItem
+            }
+        },
+        State {
+            name: "web"
+
+            PropertyChanges {
+                root.delegate: actionItem
             }
         }
     ]
