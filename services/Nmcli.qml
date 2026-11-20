@@ -1292,7 +1292,7 @@ Singleton {
             root.ethernetSpeed = "";
             return;
         }
-        speedProc.command = ["sh", "-c", `cat /sys/class/net/${interfaceName}/speed 2>/dev/null`];
+        speedProc.command = ["cat", `/sys/class/net/${interfaceName}/speed`];
         speedProc.running = true;
     }
 
@@ -1304,7 +1304,7 @@ Singleton {
         }
         dataUsageProc.iface = interfaceName;
         dataUsageProc.cb = callback;
-        dataUsageProc.command = ["sh", "-c", `cat /sys/class/net/${interfaceName}/statistics/rx_bytes /sys/class/net/${interfaceName}/statistics/tx_bytes 2>/dev/null`];
+        dataUsageProc.command = ["cat", `/sys/class/net/${interfaceName}/statistics/rx_bytes`, `/sys/class/net/${interfaceName}/statistics/tx_bytes`];
         dataUsageProc.running = true;
     }
 
