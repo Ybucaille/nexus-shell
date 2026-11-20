@@ -172,7 +172,7 @@ Singleton {
         name: "toggleDnd"
         description: "Toggle do not disturb"
         onPressed: {
-            PersistentState.doNotDisturb = !PersistentState.doNotDisturb;
+            props.dnd = !props.dnd;
         }
     }
 
