@@ -19,12 +19,15 @@ Singleton {
         const regexChecker = /^\^.*\$$/;
         for (const filter of filterList) {
             if (regexChecker.test(filter)) {
-                let re = _regexCache[filter];
-                if (!re) {
-                    re = new RegExp(filter);
-                    _regexCache[filter] = re;
+                if (!(filter in _regexCache)) {
+                    try {
+                        _regexCache[filter] = new RegExp(filter);
+                    } catch (e) {
+                        console.warn("Strings: invalid regex filter:", filter, e);
+                        _regexCache[filter] = null;
+                    }
                 }
-                if (re.test(target))
+                if (_regexCache[filter]?.test(target))
                     return true;
             } else {
                 if (filter === target)
