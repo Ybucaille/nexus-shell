@@ -85,10 +85,14 @@ Singleton {
 
         command: ["ddcutil", "detect", "--brief"]
         stdout: StdioCollector {
-            onStreamFinished: root.ddcMonitors = text.trim().split("\n\n").filter(d => d.startsWith("Display ")).map(d => ({
-                        busNum: d.match(/I2C bus:[ ]*\/dev\/i2c-([0-9]+)/)[1],
-                        connector: d.match(/DRM connector:\s+(.*)/)[1].replace(/^card\d+-/, "") // strip "card1-"
-                    }))
+            onStreamFinished: root.ddcMonitors = text.trim().split("\n\n").filter(d => d.startsWith("Display ")).map(d => {
+                const bus = d.match(/I2C bus:[ ]*\/dev\/i2c-([0-9]+)/);
+                const conn = d.match(/DRM connector:\s+(.*)/);
+                return bus && conn ? {
+                    busNum: bus[1],
+                    connector: conn[1].replace(/^card\d+-/, "") // strip "card1-"
+                } : null;
+            }).filter(d => d)
         }
     }
 
@@ -177,10 +181,13 @@ Singleton {
                 onStreamFinished: {
                     if (monitor.isAppleDisplay) {
                         const val = parseInt(text.trim());
-                        monitor.brightness = val / 101;
+                        if (!isNaN(val))
+                            monitor.brightness = val / 101;
                     } else {
                         const [, , , cur, max] = text.split(" ");
-                        monitor.brightness = parseInt(cur) / parseInt(max);
+                        const val = parseInt(cur) / parseInt(max);
+                        if (isFinite(val))
+                            monitor.brightness = val;
                     }
                 }
             }
