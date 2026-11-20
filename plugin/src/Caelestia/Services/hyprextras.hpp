@@ -3,6 +3,7 @@
 #include <qlocalsocket.h>
 #include <qobject.h>
 #include <qqmlintegration.h>
+#include <qset.h>
 #include <qsharedpointer.h>
 #include <qvariant.h>
 
@@ -44,6 +45,7 @@ private:
     QLocalSocket* m_socket;
     bool m_socketValid;
     bool m_usingLua = false;
+    QSet<QString> m_invalidJsonWarned;
 
     QVariantHash m_options;
     HyprDevices* const m_devices;

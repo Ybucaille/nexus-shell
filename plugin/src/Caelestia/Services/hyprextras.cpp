@@ -2,6 +2,7 @@
 
 #include <qdir.h>
 #include <qjsonarray.h>
+#include <qjsondocument.h>
 #include <qlocalsocket.h>
 #include <qloggingcategory.h>
 #include <qvariant.h>
@@ -198,8 +199,26 @@ void HyprExtras::handleEvent(const QString& event) {
 
 HyprExtras::SocketPtr HyprExtras::makeRequestJson(
     const QString& request, const std::function<void(bool, QJsonDocument)>& callback) {
-    return makeRequest(u"j/"_s + request, [callback](bool success, const QByteArray& response) {
-        callback(success, QJsonDocument::fromJson(response));
+    return makeRequest(u"j/"_s + request, [this, request, callback](bool success, const QByteArray& response) {
+        if (!success) {
+            callback(false, {});
+            return;
+        }
+
+        QJsonParseError error;
+        const auto doc = QJsonDocument::fromJson(response, &error);
+        if (error.error != QJsonParseError::NoError) {
+            // Hyprland can emit invalid JSON (e.g. a bare `none`), keep the previous state rather than clearing it
+            if (!m_invalidJsonWarned.contains(request)) {
+                m_invalidJsonWarned.insert(request);
+                qCWarning(lcHypr) << "makeRequestJson: invalid JSON response for" << request << ":"
+                                  << error.errorString() << "at offset" << error.offset;
+            }
+            callback(false, {});
+            return;
+        }
+
+        callback(true, doc);
     });
 }
 
